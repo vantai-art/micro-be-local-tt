@@ -55,8 +55,19 @@ public class Order {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private DiningTable diningTable;
 
+    /** Giữ lại cột cũ để backward-compat với dữ liệu đã có */
     @Column(name = "customer_name")
     private String customerName;
+
+    /**
+     * Quan hệ tới Customer entity — thay thế dần chuỗi customerName đơn giản.
+     * FetchType.LAZY để tránh N+1 khi load danh sách order.
+     * Nullable = true → đơn hàng cũ / walk-in không bắt buộc có Customer.
+     */
+    @ManyToOne(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @JoinColumn(name = "customer_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private Customer customer;
 
     public Order() {}
 
@@ -111,4 +122,13 @@ public class Order {
 
     public String getCustomerName() { return customerName; }
     public void setCustomerName(String customerName) { this.customerName = customerName; }
+
+    public Customer getCustomer() { return customer; }
+    public void setCustomer(Customer customer) {
+        this.customer = customer;
+        // Sync customerName cho backward-compat
+        if (customer != null && this.customerName == null) {
+            this.customerName = customer.getFullName();
+        }
+    }
 }

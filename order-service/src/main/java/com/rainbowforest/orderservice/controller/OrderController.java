@@ -20,6 +20,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.math.BigDecimal;
@@ -111,6 +112,7 @@ public class OrderController {
     // ==========================================
     // POST /order/{userId} → đặt hàng qua Cookie
     // ==========================================
+    @Transactional
     @PostMapping(value = "/order/{userId}")
     public ResponseEntity<Order> saveOrder(
             @PathVariable("userId") Long userId,
@@ -144,6 +146,7 @@ public class OrderController {
     // ==========================================
     // POST /order/{userId}/direct
     // ==========================================
+    @Transactional
     @PostMapping(value = "/order/{userId}/direct")
     public ResponseEntity<Order> saveOrderDirect(
             @PathVariable("userId") Long userId,
@@ -184,10 +187,8 @@ public class OrderController {
 
     // ==========================================
     // POST /order/table → nhân viên / khách tạo order cho bàn
-    // Body: { "tableId": 3, "customerName": "Nguyễn Văn A", "note": "...",
-    // "items": [{ "productId":1, "productName":"Cà phê",
-    // "price":35000, "quantity":2 }] }
     // ==========================================
+    @Transactional
     @PostMapping(value = "/order/table")
     public ResponseEntity<Order> saveTableOrder(
             @RequestBody TableOrderRequest tableRequest,
@@ -438,13 +439,35 @@ public class OrderController {
                 final Long fid = productId;
                 final String fname = productName;
                 final BigDecimal fprice = price;
+                // FIX: tránh race condition duplicate unique product_id
+                // Dùng findByProductId trước, nếu không có thì tạo mới trong try/catch
                 product = productRepository.findByProductId(fid).orElseGet(() -> {
-                    Product p = new Product();
-                    p.setProductId(fid); // product_id = id từ catalog
-                    p.setProductName(fname);
-                    p.setPrice(fprice);
-                    return productRepository.save(p);
+                    try {
+                        Product p = new Product();
+                        p.setProductId(fid);
+                        p.setProductName(fname);
+                        p.setPrice(fprice);
+                        return productRepository.saveAndFlush(p);
+                    } catch (Exception duplicateEx) {
+                        // Race condition: record vừa được insert bởi request khác → fetch lại
+                        log.warn("Duplicate product_id={}, fetch lại từ DB", fid);
+                        return productRepository.findByProductId(fid)
+                                .orElseThrow(() -> new RuntimeException("Không thể lưu product id=" + fid));
+                    }
                 });
+                // Cập nhật tên/giá nếu thay đổi
+                boolean changed = false;
+                if (fname != null && !fname.equals(product.getProductName())) {
+                    product.setProductName(fname);
+                    changed = true;
+                }
+                if (fprice != null && fprice.compareTo(BigDecimal.ZERO) > 0
+                        && fprice.compareTo(product.getPrice()) != 0) {
+                    product.setPrice(fprice);
+                    changed = true;
+                }
+                if (changed)
+                    product = productRepository.save(product);
             } else {
                 Product p = new Product();
                 p.setProductName(productName);
