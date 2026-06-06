@@ -11,12 +11,8 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 
-/**
- * CRUD cho Customer.
- * Base path: /customer
- */
 @RestController
-@RequestMapping("/customer")
+@RequestMapping("/customers")
 public class CustomerController {
 
     @Autowired
@@ -25,7 +21,7 @@ public class CustomerController {
     @Autowired
     private HeaderGenerator headerGenerator;
 
-    // ── GET /customer ────────────────────────────────────────────────────────
+    // GET /customers
     @GetMapping
     public ResponseEntity<List<Customer>> getAllCustomers() {
         List<Customer> list = customerRepository.findAll();
@@ -35,7 +31,7 @@ public class CustomerController {
         return new ResponseEntity<>(headerGenerator.getHeadersForError(), HttpStatus.NOT_FOUND);
     }
 
-    // ── GET /customer/{id} ───────────────────────────────────────────────────
+    // GET /customers/{id}
     @GetMapping("/{id}")
     public ResponseEntity<Customer> getCustomerById(@PathVariable Long id) {
         return customerRepository.findById(id)
@@ -43,7 +39,7 @@ public class CustomerController {
                 .orElse(new ResponseEntity<>(headerGenerator.getHeadersForError(), HttpStatus.NOT_FOUND));
     }
 
-    // ── GET /customer/search?phone=xxx ───────────────────────────────────────
+    // GET /customers?phone=xxx
     @GetMapping(params = "phone")
     public ResponseEntity<Customer> getCustomerByPhone(@RequestParam("phone") String phone) {
         return customerRepository.findByPhoneNumber(phone)
@@ -51,7 +47,7 @@ public class CustomerController {
                 .orElse(new ResponseEntity<>(headerGenerator.getHeadersForError(), HttpStatus.NOT_FOUND));
     }
 
-    // ── GET /customer/search?name=xxx ────────────────────────────────────────
+    // GET /customers?name=xxx
     @GetMapping(params = "name")
     public ResponseEntity<List<Customer>> searchByName(@RequestParam("name") String name) {
         List<Customer> list = customerRepository.findByFullNameContainingIgnoreCase(name);
@@ -61,13 +57,24 @@ public class CustomerController {
         return new ResponseEntity<>(headerGenerator.getHeadersForError(), HttpStatus.NOT_FOUND);
     }
 
-    // ── POST /customer ───────────────────────────────────────────────────────
+    // POST /customers
     @PostMapping
     public ResponseEntity<Customer> createCustomer(
             @RequestBody Customer customer, HttpServletRequest request) {
-        if (customer == null || customer.getFullName() == null || customer.getFullName().isBlank()) {
+
+        // FE gửi "name" → map sang fullName nếu chưa có
+        if (customer.getFullName() == null && customer.getName() != null) {
+            customer.setFullName(customer.getName());
+        }
+        // FE gửi "phone" → map sang phoneNumber nếu chưa có
+        if (customer.getPhoneNumber() == null && customer.getPhone() != null) {
+            customer.setPhoneNumber(customer.getPhone());
+        }
+
+        if (customer.getFullName() == null || customer.getFullName().isBlank()) {
             return new ResponseEntity<>(headerGenerator.getHeadersForError(), HttpStatus.BAD_REQUEST);
         }
+
         // Tránh tạo trùng theo SĐT
         if (customer.getPhoneNumber() != null && !customer.getPhoneNumber().isBlank()) {
             var existing = customerRepository.findByPhoneNumber(customer.getPhoneNumber());
@@ -78,6 +85,7 @@ public class CustomerController {
                         HttpStatus.OK);
             }
         }
+
         Customer saved = customerRepository.save(customer);
         return new ResponseEntity<>(
                 saved,
@@ -85,22 +93,38 @@ public class CustomerController {
                 HttpStatus.CREATED);
     }
 
-    // ── PUT /customer/{id} ───────────────────────────────────────────────────
+    // PUT /customers/{id}
     @PutMapping("/{id}")
     public ResponseEntity<Customer> updateCustomer(
             @PathVariable Long id, @RequestBody Customer data) {
         return customerRepository.findById(id).map(c -> {
-            if (data.getFullName() != null) c.setFullName(data.getFullName());
-            if (data.getPhoneNumber() != null) c.setPhoneNumber(data.getPhoneNumber());
-            if (data.getEmail() != null) c.setEmail(data.getEmail());
-            if (data.getNote() != null) c.setNote(data.getNote());
-            if (data.getUserId() != null) c.setUserId(data.getUserId());
+            if (data.getFullName() != null)
+                c.setFullName(data.getFullName());
+            else if (data.getName() != null)
+                c.setFullName(data.getName());
+
+            if (data.getPhoneNumber() != null)
+                c.setPhoneNumber(data.getPhoneNumber());
+            else if (data.getPhone() != null)
+                c.setPhoneNumber(data.getPhone());
+
+            if (data.getEmail() != null)
+                c.setEmail(data.getEmail());
+            if (data.getAddress() != null)
+                c.setAddress(data.getAddress());
+            if (data.getTaxCode() != null)
+                c.setTaxCode(data.getTaxCode());
+            if (data.getNote() != null)
+                c.setNote(data.getNote());
+            if (data.getUserId() != null)
+                c.setUserId(data.getUserId());
+
             Customer saved = customerRepository.save(c);
             return new ResponseEntity<>(saved, headerGenerator.getHeadersForSuccessGetMethod(), HttpStatus.OK);
         }).orElse(new ResponseEntity<>(headerGenerator.getHeadersForError(), HttpStatus.NOT_FOUND));
     }
 
-    // ── DELETE /customer/{id} ────────────────────────────────────────────────
+    // DELETE /customers/{id}
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCustomer(@PathVariable Long id) {
         if (!customerRepository.existsById(id)) {
