@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
@@ -16,17 +15,14 @@ public class PayrollController {
 
     private final PayrollService payrollService;
 
-    // Tính lương cho 1 nhân viên
     @PostMapping("/calculate")
     public ResponseEntity<PayrollDto.Response> calculate(@RequestBody PayrollDto.CalculateRequest request) {
         return ResponseEntity.ok(payrollService.calculate(request));
     }
 
-    // Tính lương hàng loạt tất cả nhân viên active trong tháng
     @PostMapping("/calculate-all")
     public ResponseEntity<PayrollDto.Response> calculateAll(
-            @RequestParam int month,
-            @RequestParam int year) {
+            @RequestParam int month, @RequestParam int year) {
         return ResponseEntity.ok(payrollService.calculateAll(month, year));
     }
 
@@ -42,30 +38,30 @@ public class PayrollController {
 
     @GetMapping
     public ResponseEntity<List<PayrollDto.Response>> getByMonthAndYear(
-            @RequestParam int month,
-            @RequestParam int year) {
+            @RequestParam int month, @RequestParam int year) {
         return ResponseEntity.ok(payrollService.getByMonthAndYear(month, year));
     }
 
-    // Duyệt bảng lương
     @PatchMapping("/{id}/approve")
     public ResponseEntity<PayrollDto.Response> approve(
-            @PathVariable Long id,
-            @RequestParam Long approverId) {
+            @PathVariable Long id, @RequestParam Long approverId) {
         return ResponseEntity.ok(payrollService.approve(id, approverId));
     }
 
-    // Đánh dấu đã thanh toán
-    @PatchMapping("/{id}/paid")
+    // FE gọi PUT /hrm/payrolls/$id/pay
+    @PutMapping("/{id}/pay")
+    public ResponseEntity<PayrollDto.Response> pay(@PathVariable Long id) {
+        return ResponseEntity.ok(payrollService.markPaid(id));
+    }
+
+    // Legacy
+    @PatchMapping("/{id}/mark-paid")
     public ResponseEntity<PayrollDto.Response> markPaid(@PathVariable Long id) {
         return ResponseEntity.ok(payrollService.markPaid(id));
     }
 
-    // Tổng quỹ lương tháng
     @GetMapping("/total")
-    public ResponseEntity<BigDecimal> getTotalPayroll(
-            @RequestParam int month,
-            @RequestParam int year) {
+    public ResponseEntity<?> getTotal(@RequestParam int month, @RequestParam int year) {
         return ResponseEntity.ok(payrollService.getTotalPayrollByMonthAndYear(month, year));
     }
 }

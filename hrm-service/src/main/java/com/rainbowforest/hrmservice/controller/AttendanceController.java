@@ -11,38 +11,56 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
-@RequestMapping("/hrm/attendances")
 @RequiredArgsConstructor
 public class AttendanceController {
 
     private final AttendanceService attendanceService;
 
-    // Check-in nhanh (dùng thời gian hệ thống)
-    @PostMapping("/check-in/{employeeId}")
-    public ResponseEntity<AttendanceDto.Response> checkIn(@PathVariable Long employeeId) {
+    // FE gọi GET /hrm/attendance
+    @GetMapping("/hrm/attendance")
+    public ResponseEntity<List<AttendanceDto.Response>> getAllAttendance() {
+        return ResponseEntity.ok(attendanceService.getByDate(LocalDate.now()));
+    }
+
+    // FE gọi POST /hrm/attendance/check-in body: {employeeId}
+    @PostMapping("/hrm/attendance/check-in")
+    public ResponseEntity<AttendanceDto.Response> checkIn(@RequestBody Map<String, Object> body) {
+        Long employeeId = Long.parseLong(body.get("employeeId").toString());
         return ResponseEntity.status(HttpStatus.CREATED).body(attendanceService.checkIn(employeeId));
     }
 
-    // Check-out nhanh
-    @PatchMapping("/check-out/{employeeId}")
-    public ResponseEntity<AttendanceDto.Response> checkOut(@PathVariable Long employeeId) {
+    // FE gọi POST /hrm/attendance/check-out body: {attendanceId}
+    @PostMapping("/hrm/attendance/check-out")
+    public ResponseEntity<AttendanceDto.Response> checkOut(@RequestBody Map<String, Object> body) {
+        Long employeeId = Long.parseLong(body.get("attendanceId").toString());
         return ResponseEntity.ok(attendanceService.checkOut(employeeId));
     }
 
-    // Tạo/Cập nhật chấm công thủ công (admin)
-    @PostMapping
+    // ── Legacy endpoints (giữ lại) ────────────────────────────────────────────
+    @PostMapping("/hrm/attendances/check-in/{employeeId}")
+    public ResponseEntity<AttendanceDto.Response> checkInLegacy(@PathVariable Long employeeId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(attendanceService.checkIn(employeeId));
+    }
+
+    @PatchMapping("/hrm/attendances/check-out/{employeeId}")
+    public ResponseEntity<AttendanceDto.Response> checkOutLegacy(@PathVariable Long employeeId) {
+        return ResponseEntity.ok(attendanceService.checkOut(employeeId));
+    }
+
+    @PostMapping("/hrm/attendances")
     public ResponseEntity<AttendanceDto.Response> createOrUpdate(@Valid @RequestBody AttendanceDto.Request request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(attendanceService.createOrUpdate(request));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/hrm/attendances/{id}")
     public ResponseEntity<AttendanceDto.Response> getById(@PathVariable Long id) {
         return ResponseEntity.ok(attendanceService.getById(id));
     }
 
-    @GetMapping("/employee/{employeeId}")
+    @GetMapping("/hrm/attendances/employee/{employeeId}")
     public ResponseEntity<List<AttendanceDto.Response>> getByEmployee(
             @PathVariable Long employeeId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -50,13 +68,13 @@ public class AttendanceController {
         return ResponseEntity.ok(attendanceService.getByEmployeeAndDateRange(employeeId, from, to));
     }
 
-    @GetMapping("/date/{date}")
+    @GetMapping("/hrm/attendances/date/{date}")
     public ResponseEntity<List<AttendanceDto.Response>> getByDate(
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(attendanceService.getByDate(date));
     }
 
-    @GetMapping("/employee/{employeeId}/summary")
+    @GetMapping("/hrm/attendances/employee/{employeeId}/summary")
     public ResponseEntity<AttendanceDto.MonthlySummary> getMonthlySummary(
             @PathVariable Long employeeId,
             @RequestParam int month,
@@ -64,7 +82,7 @@ public class AttendanceController {
         return ResponseEntity.ok(attendanceService.getMonthlySummary(employeeId, month, year));
     }
 
-    @PatchMapping("/{id}/confirm")
+    @PatchMapping("/hrm/attendances/{id}/confirm")
     public ResponseEntity<AttendanceDto.Response> confirm(
             @PathVariable Long id,
             @RequestParam Long confirmedBy) {
