@@ -30,10 +30,14 @@ public class EmployeeDto {
         private BigDecimal allowance;
         private Long departmentId;
         private Long positionId;
+        private Long branchId;
         private Long userId;
         private Integer annualLeaveDays;
         private String avatarUrl;
         private String note;
+        // Dùng cho activity log — không lưu vào entity Employee
+        private String reason;
+        private String evidence;
     }
 
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
@@ -56,11 +60,20 @@ public class EmployeeDto {
         private String departmentName;
         private Long positionId;
         private String positionName;
+        private Long branchId;
+        private String branchName;
         private Long userId;
         private Integer annualLeaveDays;
         private String avatarUrl;
         private String note;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
+        // Branch WiFi / GPS info for mobile check-in
+        private String branchSsid;
+        private String branchBssid;
+        private Double branchLatitude;
+        private Double branchLongitude;
+        private Double branchRadiusMeters;
+        private Boolean branchIsDemo;
     }
 }

@@ -25,7 +25,7 @@ public class EmployeeController {
 
     @PutMapping("/{id}")
     public ResponseEntity<EmployeeDto.Response> update(@PathVariable Long id,
-                                                        @Valid @RequestBody EmployeeDto.Request request) {
+            @Valid @RequestBody EmployeeDto.Request request) {
         return ResponseEntity.ok(employeeService.update(id, request));
     }
 
@@ -37,6 +37,11 @@ public class EmployeeController {
     @GetMapping("/code/{code}")
     public ResponseEntity<EmployeeDto.Response> getByCode(@PathVariable String code) {
         return ResponseEntity.ok(employeeService.getByEmployeeCode(code));
+    }
+
+    @GetMapping("/by-user/{userId}")
+    public ResponseEntity<EmployeeDto.Response> getByUserId(@PathVariable Long userId) {
+        return ResponseEntity.ok(employeeService.getByUserId(userId));
     }
 
     @GetMapping
@@ -61,13 +66,21 @@ public class EmployeeController {
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<EmployeeDto.Response> changeStatus(@PathVariable Long id,
-                                                               @RequestParam EmployeeStatus status) {
+            @RequestParam EmployeeStatus status) {
         return ResponseEntity.ok(employeeService.changeStatus(id, status));
     }
 
+    // Soft delete — chuyển trạng thái "Đã sa thải", giữ hồ sơ
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         employeeService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // Hard delete — xóa hẳn khỏi database (dùng cho record test/sai)
+    @DeleteMapping("/{id}/force")
+    public ResponseEntity<Void> forceDelete(@PathVariable Long id) {
+        employeeService.forceDelete(id);
         return ResponseEntity.noContent().build();
     }
 }

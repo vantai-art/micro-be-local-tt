@@ -25,11 +25,10 @@ public class AttendanceController {
         return ResponseEntity.ok(attendanceService.getByDate(LocalDate.now()));
     }
 
-    // FE gọi POST /hrm/attendance/check-in body: {employeeId}
+    // FE gọi POST /hrm/attendance/check-in body: {employeeId, latitude, longitude, bssid, ssid}
     @PostMapping("/hrm/attendance/check-in")
-    public ResponseEntity<AttendanceDto.Response> checkIn(@RequestBody Map<String, Object> body) {
-        Long employeeId = Long.parseLong(body.get("employeeId").toString());
-        return ResponseEntity.status(HttpStatus.CREATED).body(attendanceService.checkIn(employeeId));
+    public ResponseEntity<AttendanceDto.Response> checkIn(@RequestBody AttendanceDto.CheckInRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(attendanceService.checkInWithGeo(request));
     }
 
     // FE gọi POST /hrm/attendance/check-out body: {attendanceId}

@@ -9,6 +9,8 @@ import com.rainbowforest.hrmservice.enums.LeaveType;
 import com.rainbowforest.hrmservice.repository.AttendanceRepository;
 import com.rainbowforest.hrmservice.repository.EmployeeRepository;
 import com.rainbowforest.hrmservice.repository.LeaveRequestRepository;
+import com.rainbowforest.hrmservice.enums.ActionType;
+import com.rainbowforest.hrmservice.service.ActivityLogService;
 import com.rainbowforest.hrmservice.service.LeaveRequestService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +32,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final EmployeeRepository employeeRepository;
     private final AttendanceRepository attendanceRepository;
+    private final ActivityLogService activityLogService;
 
     @Override
     @Transactional
@@ -70,7 +73,14 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
                 .status(LeaveStatus.PENDING)
                 .build();
 
-        return toResponse(leaveRequestRepository.save(leaveRequest));
+        LeaveRequestDto.Response result = toResponse(leaveRequestRepository.save(leaveRequest));
+        activityLogService.log(ActionType.CREATE_LEAVE_REQUEST,
+                "LEAVE_REQUEST", String.valueOf(result.getId()),
+                employee.getFullName() + " (" + employee.getEmployeeCode() + ")",
+                null, String.format("%s: %s → %s (%d ngày)",
+                        request.getLeaveType(), request.getStartDate(), request.getEndDate(), totalDays),
+                request.getReason(), null);
+        return result;
     }
 
     @Override
@@ -112,7 +122,13 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         createAttendanceForLeave(lr);
 
         log.info("Duyệt đơn nghỉ phép id={} cho nhân viên id={}", id, lr.getEmployee().getId());
-        return toResponse(leaveRequestRepository.save(lr));
+        LeaveRequestDto.Response result = toResponse(leaveRequestRepository.save(lr));
+        activityLogService.log(ActionType.APPROVE_LEAVE,
+                "LEAVE_REQUEST", String.valueOf(id),
+                lr.getEmployee().getFullName() + " (" + lr.getEmployee().getEmployeeCode() + ")",
+                "PENDING", "APPROVED",
+                null, null);
+        return result;
     }
 
     @Override
@@ -128,7 +144,12 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr.setApprovedAt(LocalDateTime.now());
         lr.setRejectReason(reason);
 
-        return toResponse(leaveRequestRepository.save(lr));
+        LeaveRequestDto.Response result = toResponse(leaveRequestRepository.save(lr));
+        activityLogService.log(ActionType.REJECT_LEAVE,
+                "LEAVE_REQUEST", String.valueOf(id),
+                lr.getEmployee().getFullName() + " (" + lr.getEmployee().getEmployeeCode() + ")",
+                "PENDING", "REJECTED", reason, null);
+        return result;
     }
 
     @Override
@@ -139,7 +160,12 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             throw new IllegalStateException("Không thể hủy đơn đã bắt đầu hoặc đã thanh toán");
         }
         lr.setStatus(LeaveStatus.CANCELLED);
-        return toResponse(leaveRequestRepository.save(lr));
+        LeaveRequestDto.Response result = toResponse(leaveRequestRepository.save(lr));
+        activityLogService.log(ActionType.CANCEL_LEAVE,
+                "LEAVE_REQUEST", String.valueOf(id),
+                lr.getEmployee().getFullName() + " (" + lr.getEmployee().getEmployeeCode() + ")",
+                lr.getStatus().name(), "CANCELLED", null, null);
+        return result;
     }
 
     // ---- Helpers ----

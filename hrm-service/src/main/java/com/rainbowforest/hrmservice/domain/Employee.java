@@ -77,6 +77,10 @@ public class Employee {
     @JoinColumn(name = "position_id")
     private Position position;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "branch_id")
+    private Branch branch;
+
     // Liên kết với user-service (tùy chọn)
     @Column(name = "user_id")
     private Long userId;

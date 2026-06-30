@@ -50,6 +50,53 @@ public class EmailService {
         }
     }
 
+    public void sendOtpEmail(String toEmail, String firstName, String otp) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail, "Foodie Hub 🍽️");
+            helper.setTo(toEmail);
+            helper.setSubject("Mã OTP đặt lại mật khẩu - Foodie Hub");
+
+            String htmlContent = buildOtpEmailHtml(firstName, otp);
+            helper.setText(htmlContent, true);
+            mailSender.send(message);
+        } catch (Exception e) {
+            throw new RuntimeException("Không thể gửi email OTP: " + e.getMessage(), e);
+        }
+    }
+
+    private String buildOtpEmailHtml(String firstName, String otp) {
+        return "<!DOCTYPE html><html><head><meta charset='UTF-8'></head>" +
+            "<body style='margin:0;padding:0;font-family:Arial,sans-serif;background:#f5f5f5;'>" +
+            "<table width='100%' cellpadding='0' cellspacing='0' style='background:#f5f5f5;padding:40px 0;'>" +
+            "<tr><td align='center'>" +
+            "<table width='560' cellpadding='0' cellspacing='0' style='background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);'>" +
+            "<tr><td style='background:linear-gradient(135deg,#e67e22,#d35400);padding:36px 40px;text-align:center;'>" +
+            "<div style='font-size:42px;margin-bottom:8px;'>🍽️</div>" +
+            "<h1 style='color:#fff;margin:0;font-size:26px;font-weight:800;'>Foodie Hub</h1>" +
+            "</td></tr>" +
+            "<tr><td style='padding:40px;'>" +
+            "<h2 style='color:#1a1a1a;margin:0 0 16px;font-size:22px;'>Xin chào, " + firstName + "! 👋</h2>" +
+            "<p style='color:#555;line-height:1.7;margin:0 0 24px;'>Mã OTP để đặt lại mật khẩu của bạn là:</p>" +
+            "<div style='text-align:center;margin:0 0 28px;'>" +
+            "<div style='display:inline-block;background:#fff8f0;border:2px solid #e67e22;border-radius:16px;padding:20px 40px;'>" +
+            "<span style='font-size:42px;font-weight:900;letter-spacing:12px;color:#d35400;'>" + otp + "</span>" +
+            "</div></div>" +
+            "<div style='background:#fff8f0;border:1px solid #fdd8a8;border-left:4px solid #e67e22;border-radius:10px;padding:16px 20px;margin-bottom:20px;'>" +
+            "<p style='color:#c0651a;margin:0;font-size:13px;line-height:1.6;'>" +
+            "<strong>⚠️ Lưu ý:</strong> Mã OTP có hiệu lực trong <strong>5 phút</strong>. " +
+            "Không chia sẻ mã này với bất kỳ ai." +
+            "</p></div>" +
+            "<p style='color:#999;font-size:12px;'>Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.</p>" +
+            "</td></tr>" +
+            "<tr><td style='background:#f9f9f9;padding:24px 40px;border-top:1px solid #eee;text-align:center;'>" +
+            "<p style='color:#bbb;font-size:12px;margin:0;'>© 2025 Foodie Hub · Email này được gửi tự động.</p>" +
+            "</td></tr>" +
+            "</table></td></tr></table></body></html>";
+    }
+
     private String buildEmailHtml(String firstName, String resetLink) {
         return "<!DOCTYPE html>" +
             "<html>" +

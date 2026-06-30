@@ -1,13 +1,17 @@
 package com.rainbowforest.hrmservice.service.impl;
 
+import com.rainbowforest.hrmservice.domain.Branch;
 import com.rainbowforest.hrmservice.domain.Department;
 import com.rainbowforest.hrmservice.domain.Employee;
 import com.rainbowforest.hrmservice.domain.Position;
 import com.rainbowforest.hrmservice.dto.EmployeeDto;
+import com.rainbowforest.hrmservice.enums.ActionType;
 import com.rainbowforest.hrmservice.enums.EmployeeStatus;
+import com.rainbowforest.hrmservice.repository.BranchRepository;
 import com.rainbowforest.hrmservice.repository.DepartmentRepository;
 import com.rainbowforest.hrmservice.repository.EmployeeRepository;
 import com.rainbowforest.hrmservice.repository.PositionRepository;
+import com.rainbowforest.hrmservice.service.ActivityLogService;
 import com.rainbowforest.hrmservice.service.EmployeeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +32,8 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
     private final PositionRepository positionRepository;
+    private final BranchRepository branchRepository;
+    private final ActivityLogService activityLogService;
 
     @Override
     @Transactional
@@ -39,13 +45,21 @@ public class EmployeeServiceImpl implements EmployeeService {
         Department department = null;
         if (request.getDepartmentId() != null) {
             department = departmentRepository.findById(request.getDepartmentId())
-                    .orElseThrow(() -> new NoSuchElementException("Không tìm thấy phòng ban id: " + request.getDepartmentId()));
+                    .orElseThrow(() -> new NoSuchElementException(
+                            "Không tìm thấy phòng ban id: " + request.getDepartmentId()));
         }
 
         Position position = null;
         if (request.getPositionId() != null) {
             position = positionRepository.findById(request.getPositionId())
-                    .orElseThrow(() -> new NoSuchElementException("Không tìm thấy vị trí id: " + request.getPositionId()));
+                    .orElseThrow(
+                            () -> new NoSuchElementException("Không tìm thấy vị trí id: " + request.getPositionId()));
+        }
+
+        Branch branch = null;
+        if (request.getBranchId() != null) {
+            branch = branchRepository.findById(request.getBranchId())
+                    .orElseThrow(() -> new NoSuchElementException("Không tìm thấy chi nhánh id: " + request.getBranchId()));
         }
 
         Employee employee = Employee.builder()
@@ -63,6 +77,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .allowance(request.getAllowance())
                 .department(department)
                 .position(position)
+                .branch(branch)
                 .userId(request.getUserId())
                 .annualLeaveDays(request.getAnnualLeaveDays() != null ? request.getAnnualLeaveDays() : 12)
                 .avatarUrl(request.getAvatarUrl())
@@ -71,6 +86,10 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         Employee saved = employeeRepository.save(employee);
         log.info("Tạo nhân viên mới: {} - {}", saved.getEmployeeCode(), saved.getFullName());
+        activityLogService.log(ActionType.CREATE_EMPLOYEE,
+                "EMPLOYEE", saved.getEmployeeCode(), saved.getFullName(),
+                null, summarizeEmployee(saved),
+                request.getReason(), request.getEvidence());
         return toResponse(saved);
     }
 
@@ -83,6 +102,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                 && employeeRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("Email đã tồn tại: " + request.getEmail());
         }
+
+        String oldSummary = summarizeEmployee(employee);
 
         employee.setFullName(request.getFullName());
         employee.setEmail(request.getEmail());
@@ -108,11 +129,22 @@ public class EmployeeServiceImpl implements EmployeeService {
             employee.setPosition(pos);
         }
 
+        if (request.getBranchId() != null) {
+            Branch br = branchRepository.findById(request.getBranchId())
+                    .orElseThrow(() -> new NoSuchElementException("Không tìm thấy chi nhánh id: " + request.getBranchId()));
+            employee.setBranch(br);
+        }
+
         if (request.getAnnualLeaveDays() != null) {
             employee.setAnnualLeaveDays(request.getAnnualLeaveDays());
         }
 
-        return toResponse(employeeRepository.save(employee));
+        Employee saved = employeeRepository.save(employee);
+        activityLogService.log(ActionType.UPDATE_EMPLOYEE,
+                "EMPLOYEE", saved.getEmployeeCode(), saved.getFullName(),
+                oldSummary, summarizeEmployee(saved),
+                request.getReason(), request.getEvidence());
+        return toResponse(saved);
     }
 
     @Override
@@ -153,19 +185,41 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Transactional
     public EmployeeDto.Response changeStatus(Long id, EmployeeStatus status) {
         Employee employee = findEmployeeById(id);
+        String oldStatus = employee.getStatus().name();
         employee.setStatus(status);
         if (status == EmployeeStatus.RESIGNED || status == EmployeeStatus.TERMINATED) {
             employee.setResignDate(LocalDate.now());
         }
-        return toResponse(employeeRepository.save(employee));
+        Employee saved = employeeRepository.save(employee);
+        activityLogService.log(ActionType.CHANGE_EMPLOYEE_STATUS,
+                "EMPLOYEE", saved.getEmployeeCode(), saved.getFullName(),
+                oldStatus, status.name(), null, null);
+        return toResponse(saved);
     }
 
     @Override
     @Transactional
     public void delete(Long id) {
         Employee employee = findEmployeeById(id);
+        String code = employee.getEmployeeCode();
+        String name = employee.getFullName();
         employee.setStatus(EmployeeStatus.TERMINATED);
         employeeRepository.save(employee);
+        activityLogService.log(ActionType.DELETE_EMPLOYEE,
+                "EMPLOYEE", code, name,
+                "ACTIVE", "TERMINATED", null, null);
+    }
+
+    @Override
+    @Transactional
+    public void forceDelete(Long id) {
+        Employee employee = findEmployeeById(id);
+        String code = employee.getEmployeeCode();
+        String name = employee.getFullName();
+        employeeRepository.delete(employee);
+        activityLogService.log(ActionType.DELETE_EMPLOYEE,
+                "EMPLOYEE", code, name,
+                summarizeEmployee(employee), "XÓA VĨNH VIỄN", null, null);
     }
 
     // ---- Helpers ----
@@ -175,13 +229,29 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy nhân viên id: " + id));
     }
 
+    private String summarizeEmployee(Employee e) {
+        return String.format("Lương: %s | Phụ cấp: %s | Phòng ban: %s | Chức vụ: %s | Trạng thái: %s",
+                e.getBasicSalary(),
+                e.getAllowance(),
+                e.getDepartment() != null ? e.getDepartment().getName() : "-",
+                e.getPosition() != null ? e.getPosition().getName() : "-",
+                e.getStatus());
+    }
+
     private String generateEmployeeCode() {
         String prefix = "NV" + DateTimeFormatter.ofPattern("yy").format(LocalDate.now());
         long count = employeeRepository.count() + 1;
         return prefix + String.format("%04d", count);
     }
 
+    @Override
+    public EmployeeDto.Response getByUserId(Long userId) {
+        return toResponse(employeeRepository.findByUserId(userId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy nhân viên với userId: " + userId)));
+    }
+
     private EmployeeDto.Response toResponse(Employee e) {
+        var b = e.getBranch();
         return EmployeeDto.Response.builder()
                 .id(e.getId())
                 .employeeCode(e.getEmployeeCode())
@@ -201,6 +271,14 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .departmentName(e.getDepartment() != null ? e.getDepartment().getName() : null)
                 .positionId(e.getPosition() != null ? e.getPosition().getId() : null)
                 .positionName(e.getPosition() != null ? e.getPosition().getName() : null)
+                .branchId(b != null ? b.getId() : null)
+                .branchName(b != null ? b.getName() : null)
+                .branchSsid(b != null ? b.getSsid() : null)
+                .branchBssid(b != null ? b.getBssid() : null)
+                .branchLatitude(b != null ? b.getLatitude() : null)
+                .branchLongitude(b != null ? b.getLongitude() : null)
+                .branchRadiusMeters(b != null ? b.getRadiusMeters() : null)
+                .branchIsDemo(b != null ? b.getIsDemo() : null)
                 .userId(e.getUserId())
                 .annualLeaveDays(e.getAnnualLeaveDays())
                 .avatarUrl(e.getAvatarUrl())

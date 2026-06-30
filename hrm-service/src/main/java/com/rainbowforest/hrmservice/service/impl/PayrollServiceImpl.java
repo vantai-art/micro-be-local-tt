@@ -9,6 +9,8 @@ import com.rainbowforest.hrmservice.enums.PayrollStatus;
 import com.rainbowforest.hrmservice.repository.AttendanceRepository;
 import com.rainbowforest.hrmservice.repository.EmployeeRepository;
 import com.rainbowforest.hrmservice.repository.PayrollRepository;
+import com.rainbowforest.hrmservice.enums.ActionType;
+import com.rainbowforest.hrmservice.service.ActivityLogService;
 import com.rainbowforest.hrmservice.service.PayrollService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +33,7 @@ public class PayrollServiceImpl implements PayrollService {
     private final PayrollRepository payrollRepository;
     private final EmployeeRepository employeeRepository;
     private final AttendanceRepository attendanceRepository;
+    private final ActivityLogService activityLogService;
 
     // Tỷ lệ BHXH người lao động: 8%
     private static final BigDecimal SOCIAL_INSURANCE_RATE = new BigDecimal("0.08");
@@ -129,7 +132,14 @@ public class PayrollServiceImpl implements PayrollService {
         log.info("Tính lương nhân viên {} tháng {}/{}: net={}",
                 employee.getEmployeeCode(), request.getMonth(), request.getYear(), netSalary);
 
-        return toResponse(payrollRepository.save(payroll));
+        PayrollDto.Response result = toResponse(payrollRepository.save(payroll));
+        activityLogService.log(ActionType.CALCULATE_PAYROLL,
+                "PAYROLL", String.valueOf(result.getId()),
+                employee.getFullName() + " (" + employee.getEmployeeCode() + ")",
+                null, String.format("Tháng %d/%d | Net: %s VNĐ",
+                        request.getMonth(), request.getYear(), netSalary.toPlainString()),
+                request.getNote(), null);
+        return result;
     }
 
     @Override
@@ -180,7 +190,12 @@ public class PayrollServiceImpl implements PayrollService {
         payroll.setStatus(PayrollStatus.APPROVED);
         payroll.setApprovedBy(approverId);
         payroll.setApprovedAt(LocalDateTime.now());
-        return toResponse(payrollRepository.save(payroll));
+        PayrollDto.Response r1 = toResponse(payrollRepository.save(payroll));
+        activityLogService.log(ActionType.APPROVE_PAYROLL,
+                "PAYROLL", String.valueOf(id),
+                payroll.getEmployee().getFullName() + " (" + payroll.getEmployee().getEmployeeCode() + ")",
+                "CALCULATED", "APPROVED", null, null);
+        return r1;
     }
 
     @Override
@@ -192,7 +207,12 @@ public class PayrollServiceImpl implements PayrollService {
         }
         payroll.setStatus(PayrollStatus.PAID);
         payroll.setPaidAt(LocalDateTime.now());
-        return toResponse(payrollRepository.save(payroll));
+        PayrollDto.Response r2 = toResponse(payrollRepository.save(payroll));
+        activityLogService.log(ActionType.MARK_PAID_PAYROLL,
+                "PAYROLL", String.valueOf(id),
+                payroll.getEmployee().getFullName() + " (" + payroll.getEmployee().getEmployeeCode() + ")",
+                "APPROVED", "PAID | " + payroll.getNetSalary().toPlainString() + " VNĐ", null, null);
+        return r2;
     }
 
     @Override

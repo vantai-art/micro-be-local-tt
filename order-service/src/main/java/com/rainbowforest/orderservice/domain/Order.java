@@ -27,10 +27,8 @@ public class Order {
     private BigDecimal total;
 
     // FIX: CascadeType.ALL → PERSIST,MERGE để tránh Hibernate lỗi khi load
-    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
-    @JoinTable(name = "order_items_mapping",
-            joinColumns = @JoinColumn(name = "order_id"),
-            inverseJoinColumns = @JoinColumn(name = "item_id"))
+    @ManyToMany(cascade = { CascadeType.PERSIST, CascadeType.MERGE })
+    @JoinTable(name = "order_items_mapping", joinColumns = @JoinColumn(name = "order_id"), inverseJoinColumns = @JoinColumn(name = "item_id"))
     private List<Item> items;
 
     /**
@@ -52,7 +50,7 @@ public class Order {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "table_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private DiningTable diningTable;
 
     /** Giữ lại cột cũ để backward-compat với dữ liệu đã có */
@@ -64,42 +62,93 @@ public class Order {
      * FetchType.LAZY để tránh N+1 khi load danh sách order.
      * Nullable = true → đơn hàng cũ / walk-in không bắt buộc có Customer.
      */
-    @ManyToOne(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @ManyToOne(fetch = FetchType.LAZY, cascade = { CascadeType.PERSIST, CascadeType.MERGE })
     @JoinColumn(name = "customer_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Customer customer;
 
-    public Order() {}
+    // ── Online order fields ─────────────────────────────────────
+    @Column(name = "order_type", length = 20)
+    private String orderType; // DINE_IN, ONLINE, TAKEAWAY
+
+    @Column(name = "delivery_address", length = 500)
+    private String deliveryAddress;
+
+    @Column(name = "note", length = 500)
+    private String note;
+
+    @Column(name = "payment_method", length = 30)
+    private String paymentMethod; // CASH, VNPAY, BANK_TRANSFER
+
+    public Order() {
+    }
 
     // ─── Getters & Setters ───────────────────────────────────────
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public LocalDate getOrderedDate() { return orderedDate; }
-    public void setOrderedDate(LocalDate orderedDate) { this.orderedDate = orderedDate; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public LocalDate getOrderedDate() {
+        return orderedDate;
+    }
 
-    public BigDecimal getTotal() { return total; }
-    public void setTotal(BigDecimal total) { this.total = total; }
+    public void setOrderedDate(LocalDate orderedDate) {
+        this.orderedDate = orderedDate;
+    }
 
-    public List<Item> getItems() { return items; }
-    public void setItems(List<Item> items) { this.items = items; }
+    public String getStatus() {
+        return status;
+    }
 
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
+    public void setStatus(String status) {
+        this.status = status;
+    }
 
-    public String getUserName() { return userName; }
-    public void setUserName(String userName) { this.userName = userName; }
+    public BigDecimal getTotal() {
+        return total;
+    }
+
+    public void setTotal(BigDecimal total) {
+        this.total = total;
+    }
+
+    public List<Item> getItems() {
+        return items;
+    }
+
+    public void setItems(List<Item> items) {
+        this.items = items;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public String getUserName() {
+        return userName;
+    }
+
+    public void setUserName(String userName) {
+        this.userName = userName;
+    }
 
     /**
      * FIX: getUser() tổng hợp từ userId/userName → tương thích ngược với code cũ
      */
     public User getUser() {
-        if (user != null) return user;
-        if (userId == null) return null;
+        if (user != null)
+            return user;
+        if (userId == null)
+            return null;
         User u = new User();
         u.setId(userId);
         u.setUserName(userName);
@@ -117,18 +166,63 @@ public class Order {
         }
     }
 
-    public DiningTable getDiningTable() { return diningTable; }
-    public void setDiningTable(DiningTable diningTable) { this.diningTable = diningTable; }
+    public DiningTable getDiningTable() {
+        return diningTable;
+    }
 
-    public String getCustomerName() { return customerName; }
-    public void setCustomerName(String customerName) { this.customerName = customerName; }
+    public void setDiningTable(DiningTable diningTable) {
+        this.diningTable = diningTable;
+    }
 
-    public Customer getCustomer() { return customer; }
+    public String getCustomerName() {
+        return customerName;
+    }
+
+    public void setCustomerName(String customerName) {
+        this.customerName = customerName;
+    }
+
+    public Customer getCustomer() {
+        return customer;
+    }
+
     public void setCustomer(Customer customer) {
         this.customer = customer;
         // Sync customerName cho backward-compat
         if (customer != null && this.customerName == null) {
             this.customerName = customer.getFullName();
         }
+    }
+
+    public String getOrderType() {
+        return orderType;
+    }
+
+    public void setOrderType(String orderType) {
+        this.orderType = orderType;
+    }
+
+    public String getDeliveryAddress() {
+        return deliveryAddress;
+    }
+
+    public void setDeliveryAddress(String deliveryAddress) {
+        this.deliveryAddress = deliveryAddress;
+    }
+
+    public String getNote() {
+        return note;
+    }
+
+    public void setNote(String note) {
+        this.note = note;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod;
     }
 }

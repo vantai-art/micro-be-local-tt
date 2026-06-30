@@ -7,6 +7,7 @@ import java.util.List;
 
 public interface AttendanceService {
     AttendanceDto.Response checkIn(Long employeeId);
+    AttendanceDto.Response checkInWithGeo(AttendanceDto.CheckInRequest request);
     AttendanceDto.Response checkOut(Long employeeId);
     AttendanceDto.Response createOrUpdate(AttendanceDto.Request request);
     AttendanceDto.Response getById(Long id);

@@ -5,6 +5,7 @@ import com.rainbowforest.userservice.entity.UserRole;
 import com.rainbowforest.userservice.repository.UserRepository;
 import com.rainbowforest.userservice.repository.UserRoleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
@@ -19,6 +20,9 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private UserRoleRepository userRoleRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     // ==================== USER ====================
 
@@ -40,8 +44,9 @@ public class UserServiceImpl implements UserService {
     @Override
     public User saveUser(User user) {
         user.setActive(1);
-        // FIX: Tự động tạo ROLE_USER nếu chưa tồn tại trong DB
-        // (thay vì throw exception khiến /registration trả về 500)
+        // Hash password trước khi lưu
+        user.setUserPassword(passwordEncoder.encode(user.getUserPassword()));
+
         UserRole role = userRoleRepository.findUserRoleByRoleName("ROLE_USER");
         if (role == null) {
             role = new UserRole();
@@ -55,7 +60,9 @@ public class UserServiceImpl implements UserService {
     @Override
     public User saveUserWithRole(User user, String roleName) {
         user.setActive(1);
-        // FIX: Tự động tạo role nếu chưa tồn tại
+        // Hash password trước khi lưu
+        user.setUserPassword(passwordEncoder.encode(user.getUserPassword()));
+
         UserRole role = userRoleRepository.findUserRoleByRoleName(roleName);
         if (role == null) {
             role = new UserRole();
@@ -72,8 +79,10 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy user id: " + id));
         if (newData.getUserName() != null)
             existing.setUserName(newData.getUserName());
-        if (newData.getUserPassword() != null)
-            existing.setUserPassword(newData.getUserPassword());
+        if (newData.getUserPassword() != null && !newData.getUserPassword().isBlank()) {
+            // Hash password mới
+            existing.setUserPassword(passwordEncoder.encode(newData.getUserPassword()));
+        }
         if (newData.getUserDetails() != null)
             existing.setUserDetails(newData.getUserDetails());
         return userRepository.save(existing);

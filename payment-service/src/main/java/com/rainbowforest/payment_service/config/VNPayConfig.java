@@ -81,23 +81,25 @@ public class VNPayConfig {
         cal.add(Calendar.MINUTE, 15);
         params.put("vnp_ExpireDate", sdf.format(cal.getTime()));
 
-        // Build query string và hashData
+        // Build query string và hashData — cùng encoding (standard URLEncoder, + cho space)
+        // VNPay verify phía server dùng URLEncoder.encode(value, UTF-8) chuẩn này
         StringBuilder query = new StringBuilder();
         StringBuilder hashData = new StringBuilder();
         for (Map.Entry<String, String> e : params.entrySet()) {
-            String encodedKey = URLEncoder.encode(e.getKey(), StandardCharsets.US_ASCII);
-            String encodedValue = URLEncoder.encode(e.getValue(), StandardCharsets.US_ASCII);
+            if (e.getValue() == null || e.getValue().isEmpty())
+                continue;
+            String encodedValue = URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8);
             if (query.length() > 0) {
                 query.append("&");
                 hashData.append("&");
             }
-            query.append(encodedKey).append("=").append(encodedValue);
-            // hashData dùng key gốc + value đã encode (chuẩn VNPay)
+            query.append(e.getKey()).append("=").append(encodedValue);
             hashData.append(e.getKey()).append("=").append(encodedValue);
         }
 
         String secureHash = hmacSHA512(hashSecret, hashData.toString());
         query.append("&vnp_SecureHash=").append(secureHash);
+        query.append("&vnp_SecureHashType=HmacSHA512");
 
         return vnpayUrl + "?" + query;
     }
@@ -130,7 +132,7 @@ public class VNPayConfig {
             }
         }
 
-        // Build hashData: encode value bằng UTF-8 (chuẩn VNPay sandbox)
+        // Build hashData: dùng standard URLEncoder (+ cho space) để khớp với cách VNPay tính hash
         StringBuilder hashData = new StringBuilder();
         for (Map.Entry<String, String> e : filtered.entrySet()) {
             if (hashData.length() > 0)
@@ -162,7 +164,7 @@ public class VNPayConfig {
             byte[] bytes = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
             for (byte b : bytes)
-                sb.append(String.format("%02x", b));
+                sb.append(String.format("%02x", b & 0xFF));
             return sb.toString();
         } catch (Exception e) {
             throw new RuntimeException("Lỗi tạo HMAC-SHA512", e);

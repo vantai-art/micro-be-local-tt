@@ -50,6 +50,26 @@ public class Attendance {
     @Column(name = "note", length = 255)
     private String note;
 
+    // Ca làm việc
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shift_id")
+    private Shift shift;
+
+    // Tọa độ GPS khi check-in
+    @Column(name = "check_in_latitude")
+    private Double checkInLatitude;
+
+    @Column(name = "check_in_longitude")
+    private Double checkInLongitude;
+
+    // BSSID của WiFi dùng khi check-in
+    @Column(name = "bssid_used", length = 50)
+    private String bssidUsed;
+
+    // Chế độ demo (true) hay production (false)
+    @Column(name = "is_demo", columnDefinition = "TINYINT(1) DEFAULT 0")
+    private Boolean isDemo = false;
+
     // Người xác nhận (manager id)
     @Column(name = "confirmed_by")
     private Long confirmedBy;

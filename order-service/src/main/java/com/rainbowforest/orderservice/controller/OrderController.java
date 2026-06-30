@@ -383,6 +383,67 @@ public class OrderController {
     }
 
     // ==========================================
+    // POST /order/online → khách đặt hàng online (giao hàng / tự lấy)
+    // ==========================================
+    @Transactional
+    @PostMapping(value = "/order/online")
+    public ResponseEntity<?> createOnlineOrder(@RequestBody Map<String, Object> body) {
+        try {
+            // Parse items
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> cartItems = (List<Map<String, Object>>) body.get("items");
+            if (cartItems == null || cartItems.isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("message", "Đơn hàng phải có ít nhất 1 sản phẩm"));
+            }
+
+            // Parse customer info
+            String customerName = body.get("customerName") != null ? body.get("customerName").toString()
+                    : "Khách online";
+            Long userId = null;
+            try {
+                if (body.get("customerId") != null)
+                    userId = Long.parseLong(body.get("customerId").toString());
+            } catch (NumberFormatException ignored) {
+            }
+
+            // Build items
+            List<Item> items = parseCartItems(cartItems);
+
+            // Create order
+            User user = new User();
+            if (userId != null) {
+                user.setId(userId);
+                user.setUserName(customerName);
+            }
+
+            Order order = createOrder(items, user);
+            order.setCustomerName(customerName);
+            order.setOrderType(body.get("orderType") != null ? body.get("orderType").toString() : "ONLINE");
+            order.setDeliveryAddress(
+                    body.get("deliveryAddress") != null ? body.get("deliveryAddress").toString() : null);
+            order.setNote(body.get("note") != null ? body.get("note").toString() : null);
+            order.setPaymentMethod(body.get("paymentMethod") != null ? body.get("paymentMethod").toString() : "CASH");
+            order.setStatus("PENDING");
+
+            order = orderService.saveOrder(order);
+
+            log.info("Online order #{} created: {} items, total={}", order.getId(), items.size(), order.getTotal());
+
+            // Broadcast realtime
+            ws.convertAndSend("/topic/orders",
+                    Map.of("type", "order:created", "data", order));
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(order);
+
+        } catch (Exception ex) {
+            log.error("Lỗi tạo đơn hàng online: {}", ex.getMessage(), ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Tạo đơn hàng thất bại: " + ex.getMessage()));
+        }
+    }
+
+    // ==========================================
     // Helpers
     // ==========================================
     private Order createOrder(List<Item> cart, User user) {

@@ -1,27 +1,23 @@
 package com.rainbowforest.userservice.service;
 
+import com.rainbowforest.userservice.entity.OtpToken;
 import com.rainbowforest.userservice.entity.PasswordResetToken;
 import com.rainbowforest.userservice.entity.User;
+import com.rainbowforest.userservice.repository.OtpTokenRepository;
 import com.rainbowforest.userservice.repository.PasswordResetTokenRepository;
 import com.rainbowforest.userservice.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Service xử lý luồng quên mật khẩu:
- * 1. Tìm user theo email
- * 2. Tạo token và lưu DB
- * 3. Gửi email chứa link reset
- * 4. Xác thực token khi user bấm link
- * 5. Cập nhật mật khẩu mới
- */
 @Service
 @Transactional
 public class PasswordResetService {
@@ -33,46 +29,38 @@ public class PasswordResetService {
     private PasswordResetTokenRepository tokenRepository;
 
     @Autowired
+    private OtpTokenRepository otpTokenRepository;
+
+    @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Value("${app.reset.token.expiry.minutes:15}")
     private int tokenExpiryMinutes;
 
-    /**
-     * Bước 1: Người dùng nhập email → gửi email reset.
-     * Trả về true dù email có tồn tại hay không (tránh lộ thông tin).
-     */
-    public void requestPasswordReset(String email) {
-        // Tìm user có email này trong bảng users_details
-        List<User> allUsers = userRepository.findAll();
-        User foundUser = allUsers.stream()
-                .filter(u -> u.getUserDetails() != null
-                        && email.equalsIgnoreCase(u.getUserDetails().getEmail()))
-                .findFirst()
-                .orElse(null);
+    private static final int OTP_EXPIRY_MINUTES = 5;
+    private static final String TEMP_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-        // Nếu không tìm thấy email → không làm gì (bảo mật: không thông báo lỗi)
+    // ─── Forgot password via email link (existing flow) ───────────────────────
+
+    public void requestPasswordReset(String email) {
+        User foundUser = findUserByEmail(email);
         if (foundUser == null) return;
 
-        // Xóa token cũ của user này (nếu có)
         tokenRepository.deleteByUserId(foundUser.getId());
 
-        // Tạo token ngẫu nhiên
         String token = UUID.randomUUID().toString().replace("-", "");
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(tokenExpiryMinutes);
 
         PasswordResetToken resetToken = new PasswordResetToken(token, foundUser, expiresAt);
         tokenRepository.save(resetToken);
 
-        // Gửi email
         String firstName = foundUser.getUserDetails().getFirstName();
         emailService.sendPasswordResetEmail(email, firstName, token);
     }
 
-    /**
-     * Bước 2: Xác thực token (dùng khi user bấm link trong email).
-     * @return thông tin user nếu token hợp lệ, null nếu không
-     */
     public User validateResetToken(String token) {
         Optional<PasswordResetToken> opt = tokenRepository.findByToken(token);
         if (opt.isEmpty()) return null;
@@ -83,9 +71,6 @@ public class PasswordResetService {
         return resetToken.getUser();
     }
 
-    /**
-     * Bước 3: Đặt mật khẩu mới sau khi token đã được xác thực.
-     */
     public boolean resetPassword(String token, String newPassword) {
         Optional<PasswordResetToken> opt = tokenRepository.findByToken(token);
         if (opt.isEmpty()) return false;
@@ -93,15 +78,101 @@ public class PasswordResetService {
         PasswordResetToken resetToken = opt.get();
         if (resetToken.isUsed() || resetToken.isExpired()) return false;
 
-        // Cập nhật mật khẩu
         User user = resetToken.getUser();
-        user.setUserPassword(newPassword);
+        user.setUserPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
-        // Đánh dấu token đã dùng
         resetToken.setUsed(true);
         tokenRepository.save(resetToken);
 
         return true;
+    }
+
+    // ─── OTP flow ─────────────────────────────────────────────────────────────
+
+    public boolean sendOtp(String email) {
+        User user = findUserByEmail(email);
+        if (user == null) return false;
+
+        otpTokenRepository.deleteByEmail(email);
+
+        String otp = String.format("%06d", new SecureRandom().nextInt(1_000_000));
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES);
+
+        OtpToken otpToken = new OtpToken(email, otp, expiresAt);
+        otpTokenRepository.save(otpToken);
+
+        String firstName = user.getUserDetails() != null ? user.getUserDetails().getFirstName() : "bạn";
+        emailService.sendOtpEmail(email, firstName, otp);
+        return true;
+    }
+
+    /**
+     * Xác thực OTP → tạo mật khẩu tạm, đặt mustChangePassword=true.
+     * @return mật khẩu tạm nếu OTP đúng, null nếu sai/hết hạn
+     */
+    public String verifyOtpAndGetTempPassword(String email, String otp) {
+        Optional<OtpToken> opt = otpTokenRepository.findTopByEmailOrderByCreatedAtDesc(email);
+        if (opt.isEmpty()) return null;
+
+        OtpToken otpToken = opt.get();
+        if (otpToken.isUsed() || otpToken.isExpired()) return null;
+        if (!otpToken.getOtp().equals(otp)) return null;
+
+        User user = findUserByEmail(email);
+        if (user == null) return null;
+
+        // Tạo mật khẩu tạm 10 ký tự
+        String tempPassword = generateTempPassword(10);
+        user.setUserPassword(passwordEncoder.encode(tempPassword));
+        user.setMustChangePassword(true);
+        userRepository.save(user);
+
+        otpToken.setUsed(true);
+        otpTokenRepository.save(otpToken);
+
+        return tempPassword;
+    }
+
+    /**
+     * Đổi mật khẩu bằng mật khẩu cũ. Trả về: "ok", "wrong_password", "not_found"
+     */
+    public String changePasswordWithOld(Long userId, String currentPassword, String newPassword) {
+        Optional<User> opt = userRepository.findById(userId);
+        if (opt.isEmpty()) return "not_found";
+
+        User user = opt.get();
+        boolean matches;
+        if (user.getUserPassword().startsWith("$2a$") || user.getUserPassword().startsWith("$2b$")) {
+            matches = passwordEncoder.matches(currentPassword, user.getUserPassword());
+        } else {
+            matches = user.getUserPassword().equals(currentPassword);
+        }
+        if (!matches) return "wrong_password";
+
+        user.setUserPassword(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(false);
+        userRepository.save(user);
+        return "ok";
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    private User findUserByEmail(String email) {
+        List<User> allUsers = userRepository.findAll();
+        return allUsers.stream()
+                .filter(u -> u.getUserDetails() != null
+                        && email.equalsIgnoreCase(u.getUserDetails().getEmail()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String generateTempPassword(int length) {
+        SecureRandom rng = new SecureRandom();
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            sb.append(TEMP_CHARS.charAt(rng.nextInt(TEMP_CHARS.length())));
+        }
+        return sb.toString();
     }
 }

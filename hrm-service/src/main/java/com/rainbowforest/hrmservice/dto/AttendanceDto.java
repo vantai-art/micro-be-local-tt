@@ -23,6 +23,17 @@ public class AttendanceDto {
         private String note;
     }
 
+    // Dùng cho check-in có xác thực địa lý + WiFi
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    public static class CheckInRequest {
+        @NotNull
+        private Long employeeId;
+        private Double latitude;
+        private Double longitude;
+        private String bssid;
+        private String ssid;
+    }
+
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
     public static class Response {
         private Long id;
@@ -37,6 +48,12 @@ public class AttendanceDto {
         private AttendanceStatus status;
         private String note;
         private Long confirmedBy;
+        private Long shiftId;
+        private String shiftName;
+        private Double checkInLatitude;
+        private Double checkInLongitude;
+        private String bssidUsed;
+        private Boolean isDemo;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
     }

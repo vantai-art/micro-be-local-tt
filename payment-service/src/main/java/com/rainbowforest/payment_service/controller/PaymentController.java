@@ -60,6 +60,8 @@ public class PaymentController {
                 clientIp,
                 payment.getTransactionId());
 
+        log.info("VNPay URL: {}", paymentUrl);
+
         Map<String, String> result = new HashMap<>();
         result.put("paymentUrl", paymentUrl);
         result.put("transactionId", payment.getTransactionId());
